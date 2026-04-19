@@ -1,5 +1,5 @@
 import psycopg2
-from psycopg2 import sql, extras
+from psycopg2 import extras
 from config import DB_CONFIG
 
 class Database:
@@ -59,7 +59,6 @@ class Database:
     def calculate_profitability(self, order_id):
         """
         Вызов табличной функции calculate_order_profitability
-        
         """
         try:
             with self.get_cursor() as cur:
