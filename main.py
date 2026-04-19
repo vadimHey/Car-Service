@@ -1,4 +1,3 @@
-# main.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 from database import Database
@@ -8,8 +7,8 @@ class CarServiceApp:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("Автосервис - Система управления заказами")
-        self.root.geometry("1300x750")
+        self.root.title("Автосервис - система управления заказами")
+        self.root.geometry("1200x600")
         
         # Подключение к БД
         self.db = Database()
@@ -32,22 +31,18 @@ class CarServiceApp:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Вкладка 1: Заказы
         self.orders_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.orders_frame, text="📋 Заказы")
         self.create_orders_tab()
         
-        # Вкладка 2: Склад и материалы
         self.materials_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.materials_frame, text="📦 Склад")
         self.create_materials_tab()
         
-        # Вкладка 3: Отчёты и аналитика
         self.reports_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.reports_frame, text="📊 Аналитика")
         self.create_reports_tab()
         
-        # Вкладка 4: Справочники
         self.refs_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.refs_frame, text="📚 Справочники")
         self.create_references_tab()
@@ -71,7 +66,7 @@ class CarServiceApp:
         
         # Таблица заказов
         columns = ("id", "client", "car", "accept_date", "completion_date", "status", "total_cost")
-        self.orders_tree = ttk.Treeview(self.orders_frame, columns=columns, show="headings", height=20)
+        self.orders_tree = ttk.Treeview(self.orders_frame, columns=columns, show="headings", height=8)
         
         self.orders_tree.heading("id", text="№ заказа")
         self.orders_tree.heading("client", text="Клиент")
@@ -94,8 +89,6 @@ class CarServiceApp:
         self.orders_tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
         
         self.orders_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
         
         self.orders_tree.bind("<Double-1>", lambda e: self.view_order_details())
     
@@ -103,11 +96,10 @@ class CarServiceApp:
         """Вкладка складского учёта"""
         top_frame = ttk.Frame(self.materials_frame)
         top_frame.pack(fill=tk.X, padx=5, pady=5)
-        ttk.Button(top_frame, text="🔄 Обновить", command=self.refresh_materials_tab).pack(side=tk.LEFT)
         
         columns = ("id", "name", "unit", "stock", "purchase_price", "sale_price", "markup", "markup_percent", 
                    "stock_cost_purchase", "stock_cost_sale", "last_supply")
-        self.materials_tree = ttk.Treeview(self.materials_frame, columns=columns, show="headings", height=20)
+        self.materials_tree = ttk.Treeview(self.materials_frame, columns=columns, show="headings", height=8)
         
         self.materials_tree.heading("id", text="ID")
         self.materials_tree.heading("name", text="Наименование")
@@ -117,29 +109,23 @@ class CarServiceApp:
         self.materials_tree.heading("sale_price", text="Продажа, руб")
         self.materials_tree.heading("markup", text="Наценка, руб")
         self.materials_tree.heading("markup_percent", text="Наценка, %")
-        self.materials_tree.heading("stock_cost_purchase", text="Стоимость остатков (закупка)")
-        self.materials_tree.heading("stock_cost_sale", text="Стоимость остатков (продажа)")
-        self.materials_tree.heading("last_supply", text="Дата последней поставки")
+        self.materials_tree.heading("stock_cost_purchase", text="Остатки закупок, руб")
+        self.materials_tree.heading("stock_cost_sale", text="Остатки продажи, руб")
+        self.materials_tree.heading("last_supply", text="Дата посл. поставки")
         
         self.materials_tree.column("id", width=50)
         self.materials_tree.column("name", width=200)
         self.materials_tree.column("unit", width=70)
-        self.materials_tree.column("stock", width=80)
-        self.materials_tree.column("purchase_price", width=100)
+        self.materials_tree.column("stock", width=70)
+        self.materials_tree.column("purchase_price", width=90)
         self.materials_tree.column("sale_price", width=100)
-        self.materials_tree.column("markup", width=90)
+        self.materials_tree.column("markup", width=85)
         self.materials_tree.column("markup_percent", width=90)
-        self.materials_tree.column("stock_cost_purchase", width=150)
-        self.materials_tree.column("stock_cost_sale", width=150)
+        self.materials_tree.column("stock_cost_purchase", width=140)
+        self.materials_tree.column("stock_cost_sale", width=140)
         self.materials_tree.column("last_supply", width=120)
         
-        v_scroll = ttk.Scrollbar(self.materials_frame, orient=tk.VERTICAL, command=self.materials_tree.yview)
-        h_scroll = ttk.Scrollbar(self.materials_frame, orient=tk.HORIZONTAL, command=self.materials_tree.xview)
-        self.materials_tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
-        
         self.materials_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
 
     def update_order_total_proc(self):
         """Вызов процедуры update_order_total"""
@@ -184,8 +170,8 @@ class CarServiceApp:
     def create_reports_tab(self):
         """Вкладка аналитики - функции и процедура"""
         # Функция 1: Расчёт со скидкой
-        frame1 = ttk.LabelFrame(self.reports_frame, text="1. Функция: Расчёт стоимости со скидкой", padding=10)
-        frame1.pack(fill=tk.X, padx=10, pady=5)
+        frame1 = ttk.LabelFrame(self.reports_frame, text="1. Функция: Расчёт стоимости со скидкой", padding=5)
+        frame1.pack(fill=tk.X, padx=10, pady=2)
         
         ttk.Label(frame1, text="ID заказа:").grid(row=0, column=0, padx=5, pady=5)
         self.discount_order_id = ttk.Entry(frame1, width=10)
@@ -201,8 +187,8 @@ class CarServiceApp:
         self.discount_result.grid(row=1, column=0, columnspan=5, padx=5, pady=5, sticky="w")
         
         # Функция 2: Рентабельность
-        frame2 = ttk.LabelFrame(self.reports_frame, text="2. Функция: Расчёт рентабельности заказа", padding=10)
-        frame2.pack(fill=tk.X, padx=10, pady=5)
+        frame2 = ttk.LabelFrame(self.reports_frame, text="2. Функция: Расчёт рентабельности заказа", padding=5)
+        frame2.pack(fill=tk.X, padx=10, pady=2)
         
         ttk.Label(frame2, text="ID заказа:").grid(row=0, column=0, padx=5, pady=5)
         self.profit_order_id = ttk.Entry(frame2, width=10)
@@ -212,8 +198,8 @@ class CarServiceApp:
         self.profit_result.grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky="w")
         
         # Процедура
-        frame3 = ttk.LabelFrame(self.reports_frame, text="3. Процедура: Обновление итоговой стоимости заказа", padding=10)
-        frame3.pack(fill=tk.X, padx=10, pady=5)
+        frame3 = ttk.LabelFrame(self.reports_frame, text="3. Процедура: Обновление итоговой стоимости заказа", padding=5)
+        frame3.pack(fill=tk.X, padx=10, pady=2)
         
         ttk.Label(frame3, text="ID заказа:").grid(row=0, column=0, padx=5, pady=5)
         self.update_order_id = ttk.Entry(frame3, width=10)
@@ -223,11 +209,11 @@ class CarServiceApp:
         self.update_result.grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky="w")
         
         # Представление
-        frame4 = ttk.LabelFrame(self.reports_frame, text="4. Представление: Детальная информация о заказах", padding=10)
-        frame4.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        frame4 = ttk.LabelFrame(self.reports_frame, text="4. Представление: Детальная информация о заказах", padding=5)
+        frame4.pack(fill=tk.BOTH, expand=True, padx=10, pady=2)
             
         columns = ("id", "client", "car", "plate", "master", "status", "total_cost", "works_count", "materials_count")
-        self.order_info_tree = ttk.Treeview(frame4, columns=columns, show="headings", height=10)
+        self.order_info_tree = ttk.Treeview(frame4, columns=columns, show="headings", height=8)
         
         self.order_info_tree.heading("id", text="№ заказа")
         self.order_info_tree.heading("client", text="Клиент")
@@ -252,26 +238,6 @@ class CarServiceApp:
         v_scroll = ttk.Scrollbar(frame4, orient=tk.VERTICAL, command=self.order_info_tree.yview)
         self.order_info_tree.configure(yscrollcommand=v_scroll.set)
         self.order_info_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-    
-    def create_references_tab(self):
-        """Вкладка справочников"""
-        # Создаём фрейм для вкладки справочников
-        references_frame = ttk.Frame(self.refs_frame)
-        references_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        ttk.Label(references_frame, text="Справочники", font=("Arial", 14, "bold")).pack(pady=10)
-        
-        btn_frame = ttk.Frame(references_frame)
-        btn_frame.pack(pady=10)
-        
-        ttk.Button(btn_frame, text="Клиенты", width=20, command=self.show_clients).pack(pady=2)
-        ttk.Button(btn_frame, text="Автомобили", width=20, command=self.show_cars).pack(pady=2)
-        ttk.Button(btn_frame, text="Виды работ", width=20, command=self.show_work_types).pack(pady=2)
-        ttk.Button(btn_frame, text="Материалы", width=20, command=self.show_materials).pack(pady=2)
-        ttk.Button(btn_frame, text="Мастера", width=20, command=self.show_masters).pack(pady=2)
-        
-        ttk.Label(references_frame, text="(Функционал в разработке)", font=("Arial", 10)).pack(pady=20)
     
     def create_statusbar(self):
         self.statusbar = ttk.Label(self.root, text="Готово", relief=tk.SUNKEN, anchor=tk.W)
@@ -441,27 +407,6 @@ class CarServiceApp:
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось удалить заказ: {e}")
 
-    def delete_order(self):
-        """Удаление заказа"""
-        selection = self.orders_tree.selection()
-        if not selection:
-            messagebox.showwarning("Предупреждение", "Выберите заказ для удаления")
-            return
-        
-        item = self.orders_tree.item(selection[0])
-        order_id = item['values'][0]
-        
-        if not messagebox.askyesno("Подтверждение", f"Удалить заказ №{order_id}?\nЭто действие необратимо!"):
-            return
-        
-        try:
-            self.db.delete_order(order_id)
-            messagebox.showinfo("Успех", f"Заказ №{order_id} удалён")
-            self.refresh_orders_tab()
-            self.refresh_order_full_info()
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось удалить заказ: {e}")
-
     def view_order_details(self):
         """Просмотр деталей заказа (двойной клик)"""
         selection = self.orders_tree.selection()
@@ -520,23 +465,10 @@ class CarServiceApp:
         self.refresh_order_full_info()
         self.statusbar.config(text="Все данные обновлены")
     
-    def show_about(self):
-        messagebox.showinfo("О программе",
-            "Автосервис - Система управления заказами\n\n"
-            "Версия 1.0\n"
-            "Разработано в рамках практической работы №5\n\n"
-            "Используемые технологии:\n"
-            "- Python 3\n"
-            "- Tkinter (GUI)\n"
-            "- PostgreSQL\n"
-            "- psycopg2 (без ORM)")
-    
     def create_references_tab(self):
         """Вкладка справочников"""
         self.references_frame = ttk.Frame(self.refs_frame)
         self.references_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        ttk.Label(self.references_frame, text="Справочники", font=("Arial", 14, "bold")).pack(pady=10)
         
         # Верхняя панель с кнопками выбора справочника
         selector_frame = ttk.Frame(self.references_frame)
@@ -557,13 +489,8 @@ class CarServiceApp:
         self.ref_table_frame.pack(fill=tk.BOTH, expand=True, pady=5)
         
         # Таблица
-        self.ref_table = ttk.Treeview(self.ref_table_frame, show="headings", height=15)
+        self.ref_table = ttk.Treeview(self.ref_table_frame, show="headings", height=8)
         self.ref_table.pack(fill=tk.BOTH, expand=True)
-        
-        # Скроллбар
-        scrollbar = ttk.Scrollbar(self.ref_table_frame, orient=tk.VERTICAL, command=self.ref_table.yview)
-        self.ref_table.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def show_reference(self, ref_type):
         """Показать выбранный справочник"""

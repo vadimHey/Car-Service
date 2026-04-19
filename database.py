@@ -1,4 +1,3 @@
-# database.py
 import psycopg2
 from psycopg2 import sql, extras
 from config import DB_CONFIG
