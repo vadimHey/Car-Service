@@ -116,7 +116,8 @@ class Database:
             if status and status != "все":
                 cur.execute("""
                     SELECT o.*, 
-                        COALESCE(c.last_name || ' ' || c.first_name || ' ' || c.middle_name, c.last_name || ' ' || c.first_name) as client_name,
+                        COALESCE(c.last_name || ' ' || c.first_name || ' ' || c.middle_name, 
+                                    c.last_name || ' ' || c.first_name) as client_name,
                         COALESCE(car.brand || ' ' || car.model, car.brand) as car_name
                     FROM orders o
                     LEFT JOIN client c ON o.id_client = c.id_client
@@ -127,7 +128,8 @@ class Database:
             else:
                 cur.execute("""
                     SELECT o.*, 
-                        COALESCE(c.last_name || ' ' || c.first_name || ' ' || c.middle_name, c.last_name || ' ' || c.first_name) as client_name,
+                        COALESCE(c.last_name || ' ' || c.first_name || ' ' || c.middle_name, 
+                                    c.last_name || ' ' || c.first_name) as client_name,
                         COALESCE(car.brand || ' ' || car.model, car.brand) as car_name
                     FROM orders o
                     LEFT JOIN client c ON o.id_client = c.id_client
@@ -199,25 +201,13 @@ class Database:
             """, (order_id,))
             return cur.fetchall()
     
-    def create_order(self, client_id, car_id, status='принят'):
-        """Создать новый заказ"""
-        with self.get_cursor() as cur:
-            cur.execute("""
-                INSERT INTO orders (id_client, id_car, accept_date, status, total_cost)
-                VALUES (%s, %s, CURRENT_DATE, %s, 0)
-                RETURNING id_order
-            """, (client_id, car_id, status))
-            order_id = cur.fetchone()['id_order']
-            self.commit()
-            return order_id
-    
     def add_work_to_order(self, order_id, work_type_id, quantity=1, price_at_moment=None):
         """Добавить работу в заказ"""
         with self.get_cursor() as cur:
             # Если цена не указана, берём из справочника
             if price_at_moment is None:
-                cur.execute("SELECT cost FROM work_type WHERE id_work_type = %s", (work_type_id,))
-                price_at_moment = cur.fetchone()['cost']
+                cur.execute("SELECT price FROM work_type WHERE id_work_type = %s", (work_type_id,))
+                price_at_moment = cur.fetchone()['price']
             
             cur.execute("""
                 INSERT INTO order_work (id_order, id_work_type, quantity, price_at_moment)
@@ -237,19 +227,6 @@ class Database:
                 VALUES (%s, %s, %s, %s)
             """, (order_id, material_id, quantity, price_at_moment))
             self.commit()
-    
-    def update_order_total(self, order_id):
-        """
-        Вызов хранимой процедуры update_order_total
-        """
-        try:
-            with self.get_cursor() as cur:
-                cur.execute("CALL update_order_total(%s)", (order_id,))
-                self.conn.commit()
-                return True
-        except Exception as e:
-            self.conn.rollback()
-            raise e  
     
     def assign_master_to_order(self, order_id, master_id):
         """Назначить мастера на заказ (связь master_order)"""
@@ -280,3 +257,193 @@ class Database:
                 WHERE o.id_order = %s
             """, (order_id,))
             return cur.fetchone()
+        
+    def get_client_by_id(self, client_id):
+        """Получить клиента по ID"""
+        with self.get_cursor() as cur:
+            cur.execute("SELECT * FROM client WHERE id_client = %s", (client_id,))
+            return cur.fetchone()
+        
+    def get_cars_by_client(self, client_id):
+        """Получить автомобили клиента"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT id_car, brand || ' ' || model || ' (' || plate_number || ')' as car_info
+                FROM car 
+                WHERE id_client = %s
+                ORDER BY brand, model
+            """, (client_id,))
+            return cur.fetchall()
+        
+    def get_clients_for_combo(self):
+        """Получить список клиентов для выпадающего списка"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT id_client, 
+                    last_name || ' ' || first_name || COALESCE(' ' || middle_name, '') as full_name,
+                    phone
+                FROM client 
+                ORDER BY last_name, first_name
+            """)
+            return cur.fetchall()
+        
+    def get_work_types_for_combo(self):
+        """Получить виды работ для выпадающего списка"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT id_work_type, name, price, labor_hours
+                FROM work_type 
+                ORDER BY name
+            """)
+            return cur.fetchall()
+
+    def get_materials_for_combo(self):
+        """Получить материалы для выпадающего списка"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT id_material, name, sale_price, stock_balance
+                FROM material 
+                WHERE stock_balance > 0 OR stock_balance IS NULL
+                ORDER BY name
+            """)
+            return cur.fetchall()
+
+    def get_masters_for_combo(self):
+        """Получить список мастеров"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT id_master, 
+                    last_name || ' ' || first_name || COALESCE(' ' || middle_name, '') as full_name
+                FROM master 
+                ORDER BY last_name, first_name
+            """)
+            return cur.fetchall()
+        
+    def get_order_works_with_names(self, order_id):
+        """Получить работы заказа с названиями"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT ow.*, wt.name, wt.labor_hours
+                FROM order_work ow
+                JOIN work_type wt ON ow.id_work_type = wt.id_work_type
+                WHERE ow.id_order = %s
+            """, (order_id,))
+            return cur.fetchall()
+
+    def get_order_materials_with_names(self, order_id):
+        """Получить материалы заказа с названиями"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT om.*, m.name, m.unit
+                FROM order_material om
+                JOIN material m ON om.id_material = m.id_material
+                WHERE om.id_order = %s
+            """, (order_id,))
+            return cur.fetchall()
+
+    def get_order_masters(self, order_id):
+        """Получить мастеров заказа"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT m.id_master, m.last_name || ' ' || m.first_name || COALESCE(' ' || m.middle_name, '') as full_name
+                FROM master_order mo
+                JOIN master m ON mo.id_master = m.id_master
+                WHERE mo.id_order = %s
+            """, (order_id,))
+            return cur.fetchall()
+
+    def get_order_summary(self, order_id):
+        """Получить сводку по заказу"""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT o.*, c.id_client, c.last_name, c.first_name, car.id_car
+                FROM orders o
+                JOIN client c ON o.id_client = c.id_client
+                JOIN car ON o.id_car = car.id_car
+                WHERE o.id_order = %s
+            """, (order_id,))
+            return cur.fetchone()
+        
+    def create_full_order(self, client_id, car_id, master_ids, work_items, material_items):
+        """Создание полного заказа"""
+        from datetime import datetime
+
+        with self.get_cursor() as cur:
+            # Получаем текущую дату и время (без долей секунд)
+            current_datetime = datetime.now().replace(microsecond=0)
+
+            # Создаём заказ
+            cur.execute("""
+                INSERT INTO orders (id_client, id_car, accept_date, status, total_cost)
+                VALUES (%s, %s, %s, 'принят', 0)
+                RETURNING id_order
+            """, (client_id, car_id, current_datetime))
+            order_id = cur.fetchone()['id_order']
+            
+            # Добавляем работы
+            for w in work_items:
+                cur.execute("""
+                    INSERT INTO order_work (id_order, id_work_type, quantity, price_at_moment)
+                    VALUES (%s, %s, %s, %s)
+                """, (order_id, w['work_type_id'], w['quantity'], w['price']))
+            
+            # Добавляем материалы
+            for m in material_items:
+                cur.execute("""
+                    INSERT INTO order_material (id_order, id_material, quantity, price_at_moment)
+                    VALUES (%s, %s, %s, %s)
+                """, (order_id, m['material_id'], m['quantity'], m['price']))
+            
+            # Добавляем мастеров
+            for master_id in master_ids:
+                cur.execute("""
+                    INSERT INTO master_order (id_order, id_master)
+                    VALUES (%s, %s)
+                """, (order_id, master_id))
+            
+            # Обновляем стоимость через процедуру
+            cur.execute("CALL update_order_total(%s)", (order_id,))
+            
+            self.commit()
+            return order_id
+        
+    def update_order_status(self, order_id, new_status):
+        """Обновить статус заказа"""
+        from datetime import datetime
+
+        with self.get_cursor() as cur:
+            # Получаем текущую дату и время (без долей секунд)
+            current_datetime = datetime.now().replace(microsecond=0)
+            
+            # Обновляем статус
+            cur.execute("""
+                UPDATE orders 
+                SET status = %s
+                WHERE id_order = %s
+            """, (new_status, order_id))
+            
+            # Если заказ выполнен или закрыт, обновляем дату выполнения
+            if new_status in ('выполнен', 'закрыт'):
+                cur.execute("""
+                    UPDATE orders 
+                    SET completion_date = %s
+                    WHERE id_order = %s AND completion_date IS NULL
+                """, (current_datetime, order_id))
+            
+            self.commit()
+
+    def delete_order(self, order_id):
+        """Полное удаление заказа"""
+        with self.get_cursor() as cur:
+            # Удаляем связи с мастерами
+            cur.execute("DELETE FROM master_order WHERE id_order = %s", (order_id,))
+            # Удаляем работы заказа
+            cur.execute("DELETE FROM order_work WHERE id_order = %s", (order_id,))
+            # Удаляем материалы заказа
+            cur.execute("DELETE FROM order_material WHERE id_order = %s", (order_id,))
+            # Удаляем оплату (если есть)
+            cur.execute("DELETE FROM payment WHERE id_order = %s", (order_id,))
+            # Удаляем сам заказ
+            cur.execute("DELETE FROM orders WHERE id_order = %s", (order_id,))
+            self.commit()
+            return True

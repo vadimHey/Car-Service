@@ -26,18 +26,6 @@ class CarServiceApp:
         """Создание главного меню"""
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
-        
-        # Меню "Файл"
-        file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Файл", menu=file_menu)
-        file_menu.add_command(label="Обновить все данные", command=self.refresh_all)
-        file_menu.add_separator()
-        file_menu.add_command(label="Выход", command=self.root.quit)
-        
-        # Меню "Справка"
-        help_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Справка", menu=help_menu)
-        help_menu.add_command(label="О программе", command=self.show_about)
     
     def create_notebook(self):
         """Создание вкладок"""
@@ -72,8 +60,8 @@ class CarServiceApp:
         
         ttk.Button(top_frame, text="➕ Новый заказ", command=self.new_order_window).pack(side=tk.LEFT, padx=2)
         ttk.Button(top_frame, text="✏️ Редактировать", command=self.edit_order).pack(side=tk.LEFT, padx=2)
-        ttk.Button(top_frame, text="🔄 Обновить", command=self.refresh_orders_tab).pack(side=tk.LEFT, padx=2)
-        
+        ttk.Button(top_frame, text="❌ Удалить заказ", command=self.delete_order).pack(side=tk.LEFT, padx=2)
+
         # Фильтр по статусу
         ttk.Label(top_frame, text="Фильтр:").pack(side=tk.LEFT, padx=(20, 5))
         self.status_filter = ttk.Combobox(top_frame, values=["все", "принят", "в работе", "выполнен", "закрыт"], width=15)
@@ -152,6 +140,46 @@ class CarServiceApp:
         self.materials_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def update_order_total_proc(self):
+        """Вызов процедуры update_order_total"""
+        try:
+            order_id = int(self.update_order_id.get())
+            
+            if order_id <= 0:
+                messagebox.showerror("Ошибка", "ID заказа должен быть положительным числом")
+                return
+            
+            # Получаем старую стоимость
+            old_order = self.db.get_order_by_id(order_id)
+            
+            if old_order is None:
+                self.update_result.config(text=f"❌ Заказ №{order_id} не найден")
+                return
+            
+            old_total = old_order['total_cost']
+            
+            # Вызываем процедуру
+            self.db.update_order_total(order_id)
+            
+            # Получаем новую стоимость
+            new_order = self.db.get_order_by_id(order_id)
+            new_total = new_order['total_cost']
+            
+            self.update_result.config(
+                text=f"🔄 Заказ №{order_id}: стоимость обновлена с {old_total} руб. на {new_total} руб."
+            )
+            self.statusbar.config(text=f"Процедура обновления выполнена для заказа {order_id}")
+            
+            # Обновляем таблицы
+            self.refresh_orders_tab()
+            self.refresh_order_full_info()
+            
+        except ValueError:
+            messagebox.showerror("Ошибка", "Введите корректный ID заказа")
+        except Exception as e:
+            self.db.conn.rollback()
+            messagebox.showerror("Ошибка БД", f"Ошибка выполнения процедуры: {e}")
     
     def create_reports_tab(self):
         """Вкладка аналитики - функции и процедура"""
@@ -368,62 +396,123 @@ class CarServiceApp:
             self.db.conn.rollback()
             messagebox.showerror("Ошибка БД", f"Заказ с таким ID не существует: {e}")
     
-    def update_order_total_proc(self):
-        """Вызов процедуры update_order_total"""
-        try:
-            order_id = int(self.update_order_id.get())
-            
-            if order_id <= 0:
-                messagebox.showerror("Ошибка", "ID заказа должен быть положительным числом")
-                return
-            
-            # Получаем старую стоимость
-            old_order = self.db.get_order_by_id(order_id)
-            
-            if old_order is None:
-                self.update_result.config(text=f"❌ Заказ №{order_id} не найден")
-                return
-            
-            old_total = old_order['total_cost']
-            
-            # Вызываем процедуру
-            self.db.update_order_total(order_id)
-            
-            # Получаем новую стоимость
-            new_order = self.db.get_order_by_id(order_id)
-            new_total = new_order['total_cost']
-            
-            self.update_result.config(
-                text=f"🔄 Заказ №{order_id}: стоимость обновлена с {old_total} руб. на {new_total} руб."
-            )
-            self.statusbar.config(text=f"Процедура обновления выполнена для заказа {order_id}")
-            
-            # Обновляем таблицы
-            self.refresh_orders_tab()
-            self.refresh_order_full_info()
-            
-        except ValueError:
-            messagebox.showerror("Ошибка", "Введите корректный ID заказа")
-        except Exception as e:
-            self.db.conn.rollback()
-            messagebox.showerror("Ошибка БД", f"Заказ с таким ID не существует: {e}")
-    
-    def view_order_details(self):
-        selection = self.orders_tree.selection()
-        if selection:
-            item = self.orders_tree.item(selection[0])
-            order_id = item['values'][0]
-            messagebox.showinfo("Детали заказа", f"Заказ №{order_id}\n\nФункционал просмотра деталей будет добавлен в следующей версии.")
-    
     def new_order_window(self):
-        messagebox.showinfo("Новый заказ", "Окно создания заказа будет добавлено в следующей версии.")
-    
+        """Открытие окна создания нового заказа"""
+        from dialogs.order_dialog import OrderDialog
+        dialog = OrderDialog(self.root, self.db)
+        self.root.wait_window(dialog.window)
+        self.refresh_orders_tab()
+        self.refresh_order_full_info()
+
     def edit_order(self):
+        """Редактирование статуса заказа"""
         selection = self.orders_tree.selection()
         if not selection:
             messagebox.showwarning("Предупреждение", "Выберите заказ для редактирования")
             return
-        messagebox.showinfo("Редактирование", "Функционал редактирования в разработке")
+        
+        item = self.orders_tree.item(selection[0])
+        order_id = item['values'][0]
+        
+        from dialogs.order_dialog import OrderDialog
+        dialog = OrderDialog(self.root, self.db, order_id)
+        self.root.wait_window(dialog.window)
+        self.refresh_orders_tab()
+        self.refresh_order_full_info()
+
+    def delete_order(self):
+        """Удаление заказа"""
+        selection = self.orders_tree.selection()
+        if not selection:
+            messagebox.showwarning("Предупреждение", "Выберите заказ для удаления")
+            return
+        
+        item = self.orders_tree.item(selection[0])
+        order_id = item['values'][0]
+        
+        if not messagebox.askyesno("Подтверждение", f"Удалить заказ №{order_id}?\nЭто действие необратимо!"):
+            return
+        
+        try:
+            self.db.delete_order(order_id)
+            messagebox.showinfo("Успех", f"Заказ №{order_id} удалён")
+            self.refresh_orders_tab()
+            self.refresh_order_full_info()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось удалить заказ: {e}")
+
+    def delete_order(self):
+        """Удаление заказа"""
+        selection = self.orders_tree.selection()
+        if not selection:
+            messagebox.showwarning("Предупреждение", "Выберите заказ для удаления")
+            return
+        
+        item = self.orders_tree.item(selection[0])
+        order_id = item['values'][0]
+        
+        if not messagebox.askyesno("Подтверждение", f"Удалить заказ №{order_id}?\nЭто действие необратимо!"):
+            return
+        
+        try:
+            self.db.delete_order(order_id)
+            messagebox.showinfo("Успех", f"Заказ №{order_id} удалён")
+            self.refresh_orders_tab()
+            self.refresh_order_full_info()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось удалить заказ: {e}")
+
+    def view_order_details(self):
+        """Просмотр деталей заказа (двойной клик)"""
+        selection = self.orders_tree.selection()
+        if not selection:
+            return
+        
+        item = self.orders_tree.item(selection[0])
+        order_id = item['values'][0]
+        
+        try:
+            order = self.db.get_order_summary(order_id)
+            works = self.db.get_order_works_with_names(order_id)
+            materials = self.db.get_order_materials_with_names(order_id)
+            masters = self.db.get_order_masters(order_id)
+            
+            details = f"=== Заказ №{order_id} ===\n\n"
+            details += f"Клиент: {order.get('client_name', 'Неизвестно')}\n"
+            details += f"Автомобиль: {order.get('car_name', 'Неизвестно')}\n"
+            details += f"Статус: {order.get('status', 'Неизвестно')}\n"
+            details += f"Дата приёма: {order.get('accept_date', 'Неизвестно')}\n"
+            details += f"Стоимость: {order.get('total_cost', 0)} руб.\n\n"
+            
+            details += "--- Выполненные работы ---\n"
+            if works:
+                for w in works:
+                    price = float(w['price_at_moment']) if w['price_at_moment'] else 0
+                    quantity = float(w['quantity']) if w['quantity'] else 0
+                    details += f"  {w['name']}: {quantity} шт. x {price} руб. = {quantity * price} руб.\n"
+            else:
+                details += "  Нет работ\n"
+            
+            details += "\n--- Использованные материалы ---\n"
+            if materials:
+                for m in materials:
+                    price = float(m['price_at_moment']) if m['price_at_moment'] else 0
+                    quantity = float(m['quantity']) if m['quantity'] else 0
+                    details += f"  {m['name']}: {quantity} {m.get('unit', 'шт.')} x {price} руб. = {quantity * price} руб.\n"
+            else:
+                details += "  Нет материалов\n"
+            
+            details += "\n--- Мастера ---\n"
+            if masters:
+                for m in masters:
+                    details += f"  {m['full_name']}\n"
+            else:
+                details += "  Нет мастеров\n"
+            
+            messagebox.showinfo("Детали заказа", details)
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось загрузить детали заказа: {e}")
     
     def refresh_all(self):
         self.refresh_orders_tab()
@@ -442,20 +531,260 @@ class CarServiceApp:
             "- PostgreSQL\n"
             "- psycopg2 (без ORM)")
     
-    def show_clients(self):
-        messagebox.showinfo("Справочник", "Справочник клиентов будет добавлен в следующей версии")
-    
-    def show_cars(self):
-        messagebox.showinfo("Справочник", "Справочник автомобилей будет добавлен в следующей версии")
-    
-    def show_work_types(self):
-        messagebox.showinfo("Справочник", "Справочник видов работ будет добавлен в следующей версии")
-    
-    def show_materials(self):
-        messagebox.showinfo("Справочник", "Справочник материалов будет добавлен в следующей версии")
-    
-    def show_masters(self):
-        messagebox.showinfo("Справочник", "Справочник мастеров будет добавлен в следующей версии")
+    def create_references_tab(self):
+        """Вкладка справочников"""
+        self.references_frame = ttk.Frame(self.refs_frame)
+        self.references_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        ttk.Label(self.references_frame, text="Справочники", font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # Верхняя панель с кнопками выбора справочника
+        selector_frame = ttk.Frame(self.references_frame)
+        selector_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(selector_frame, text="Клиенты", command=lambda: self.show_reference("client")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(selector_frame, text="Автомобили", command=lambda: self.show_reference("car")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(selector_frame, text="Виды работ", command=lambda: self.show_reference("work_type")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(selector_frame, text="Материалы", command=lambda: self.show_reference("material")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(selector_frame, text="Мастера", command=lambda: self.show_reference("master")).pack(side=tk.LEFT, padx=5)
+        
+        # Фрейм для кнопок управления (будет обновляться)
+        self.ref_buttons_frame = ttk.Frame(self.references_frame)
+        self.ref_buttons_frame.pack(fill=tk.X, pady=5)
+        
+        # Фрейм для таблицы
+        self.ref_table_frame = ttk.Frame(self.references_frame)
+        self.ref_table_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Таблица
+        self.ref_table = ttk.Treeview(self.ref_table_frame, show="headings", height=15)
+        self.ref_table.pack(fill=tk.BOTH, expand=True)
+        
+        # Скроллбар
+        scrollbar = ttk.Scrollbar(self.ref_table_frame, orient=tk.VERTICAL, command=self.ref_table.yview)
+        self.ref_table.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def show_reference(self, ref_type):
+        """Показать выбранный справочник"""
+        self.current_ref_type = ref_type
+        
+        # Очищаем старые кнопки
+        for widget in self.ref_buttons_frame.winfo_children():
+            widget.destroy()
+        
+        # Создаём новые кнопки
+        ttk.Button(self.ref_buttons_frame, text="➕ Добавить", command=self.add_ref_item).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.ref_buttons_frame, text="✏️ Редактировать", command=self.edit_ref_item).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.ref_buttons_frame, text="🗑 Удалить", command=self.delete_ref_item).pack(side=tk.LEFT, padx=5)
+        
+        # Очищаем таблицу
+        for item in self.ref_table.get_children():
+            self.ref_table.delete(item)
+        
+        # Загружаем данные в зависимости от типа
+        if ref_type == "client":
+            self.ref_table["columns"] = ("id", "lastname", "firstname", "middlename", "phone")
+            self.ref_table.heading("id", text="ID")
+            self.ref_table.heading("lastname", text="Фамилия")
+            self.ref_table.heading("firstname", text="Имя")
+            self.ref_table.heading("middlename", text="Отчество")
+            self.ref_table.heading("phone", text="Телефон")
+            
+            self.ref_table.column("id", width=50)
+            self.ref_table.column("lastname", width=150)
+            self.ref_table.column("firstname", width=150)
+            self.ref_table.column("middlename", width=150)
+            self.ref_table.column("phone", width=120)
+            
+            data = self.db.get_all_clients()
+            for item in data:
+                self.ref_table.insert("", tk.END, values=(
+                    item['id_client'], item['last_name'], item['first_name'],
+                    item.get('middle_name', ''), item.get('phone', '')
+                ))
+        
+        elif ref_type == "car":
+            self.ref_table["columns"] = ("id", "brand", "model", "plate", "year", "vin", "client")
+            self.ref_table.heading("id", text="ID")
+            self.ref_table.heading("brand", text="Марка")
+            self.ref_table.heading("model", text="Модель")
+            self.ref_table.heading("plate", text="Госномер")
+            self.ref_table.heading("year", text="Год")
+            self.ref_table.heading("vin", text="VIN")
+            self.ref_table.heading("client", text="Владелец")
+            
+            for col in self.ref_table["columns"]:
+                self.ref_table.column(col, width=100)
+            
+            data = self.db.get_all_cars()
+            for item in data:
+                self.ref_table.insert("", tk.END, values=(
+                    item['id_car'], item['brand'], item['model'], item['plate_number'],
+                    item.get('year', ''), item.get('vin', ''), item.get('owner_name', '')
+                ))
+        
+        elif ref_type == "work_type":
+            self.ref_table["columns"] = ("id", "name", "labor_hours", "price")
+            self.ref_table.heading("id", text="ID")
+            self.ref_table.heading("name", text="Наименование")
+            self.ref_table.heading("labor_hours", text="Трудоёмкость (час)")
+            self.ref_table.heading("price", text="Стоимость, руб")
+            
+            self.ref_table.column("id", width=50)
+            self.ref_table.column("name", width=250)
+            self.ref_table.column("labor_hours", width=120)
+            self.ref_table.column("price", width=120)
+            
+            data = self.db.get_all_work_types()
+            for item in data:
+                self.ref_table.insert("", tk.END, values=(
+                    item['id_work_type'], item['name'], item.get('labor_hours', 0), item.get('price', 0)
+                ))
+        
+        elif ref_type == "material":
+            self.ref_table["columns"] = ("id", "name", "unit", "id_storage", "stock", "purchase_price", "sale_price")
+            self.ref_table.heading("id", text="ID")
+            self.ref_table.heading("name", text="Наименование")
+            self.ref_table.heading("unit", text="Ед.изм.")
+            self.ref_table.heading("id_storage", text="ID склада")
+            self.ref_table.heading("stock", text="Остаток")
+            self.ref_table.heading("purchase_price", text="Закупка, руб")
+            self.ref_table.heading("sale_price", text="Продажа, руб")
+            
+            for col in self.ref_table["columns"]:
+                self.ref_table.column(col, width=100)
+            
+            data = self.db.get_all_materials()
+            for item in data:
+                self.ref_table.insert("", tk.END, values=(
+                    item['id_material'], item['name'], item.get('unit', ''),
+                    item.get('id_storage', ''), item.get('stock_balance', 0),
+                    item.get('purchase_price', 0), item.get('sale_price', 0)
+                ))
+        
+        elif ref_type == "master":
+            self.ref_table["columns"] = ("id", "lastname", "firstname", "middlename", "id_position", "specialization", "phone", "hire_date")
+            self.ref_table.heading("id", text="ID")
+            self.ref_table.heading("lastname", text="Фамилия")
+            self.ref_table.heading("firstname", text="Имя")
+            self.ref_table.heading("middlename", text="Отчество")
+            self.ref_table.heading("id_position", text="ID должности")
+            self.ref_table.heading("specialization", text="Специализация")
+            self.ref_table.heading("phone", text="Телефон")
+            self.ref_table.heading("hire_date", text="Дата приёма")
+            
+            for col in self.ref_table["columns"]:
+                self.ref_table.column(col, width=100)
+            
+            data = self.db.get_all_masters()
+            for item in data:
+                self.ref_table.insert("", tk.END, values=(
+                    item['id_master'], item['last_name'], item['first_name'],
+                    item.get('middle_name', ''), item.get('id_position', ''),
+                    item.get('specialization', ''), item.get('phone', ''),
+                    item.get('hire_date', '')
+                ))
+
+    def add_ref_buttons(self, ref_type):
+        """Добавить кнопки управления справочником"""
+        btn_frame = ttk.Frame(self.refs_frame)
+        btn_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(btn_frame, text="➕ Добавить", command=lambda: self.add_ref_item(ref_type)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="✏️ Редактировать", command=lambda: self.edit_ref_item(ref_type)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="🗑 Удалить", command=lambda: self.delete_ref_item(ref_type)).pack(side=tk.LEFT, padx=5)
+        
+        self.current_ref_type = ref_type
+
+    def add_ref_item(self):
+        """Добавление элемента справочника"""
+        if self.current_ref_type == "client":
+            from dialogs.client_dialog import ClientDialog
+            dialog = ClientDialog(self.root, self.db)
+        elif self.current_ref_type == "car":
+            from dialogs.car_dialog import CarDialog
+            dialog = CarDialog(self.root, self.db)
+        elif self.current_ref_type == "work_type":
+            from dialogs.work_type_dialog import WorkTypeDialog
+            dialog = WorkTypeDialog(self.root, self.db)
+        elif self.current_ref_type == "material":
+            from dialogs.material_dialog import MaterialDialog
+            dialog = MaterialDialog(self.root, self.db)
+        elif self.current_ref_type == "master":
+            from dialogs.master_dialog import MasterDialog
+            dialog = MasterDialog(self.root, self.db)
+        else:
+            messagebox.showinfo("В разработке", f"Добавление {self.current_ref_type} в разработке")
+            return
+        
+        self.root.wait_window(dialog.window)
+        self.show_reference(self.current_ref_type)
+
+    def edit_ref_item(self):
+        """Редактирование элемента справочника"""
+        selection = self.ref_table.selection()
+        if not selection:
+            messagebox.showwarning("Предупреждение", "Выберите элемент для редактирования")
+            return
+        
+        item = self.ref_table.item(selection[0])
+        item_id = item['values'][0]
+        
+        if self.current_ref_type == "client":
+            from dialogs.client_dialog import ClientDialog
+            dialog = ClientDialog(self.root, self.db, item_id)
+        elif self.current_ref_type == "car":
+            from dialogs.car_dialog import CarDialog
+            dialog = CarDialog(self.root, self.db, item_id)
+        elif self.current_ref_type == "work_type":
+            from dialogs.work_type_dialog import WorkTypeDialog
+            dialog = WorkTypeDialog(self.root, self.db, item_id)
+        elif self.current_ref_type == "material":
+            from dialogs.material_dialog import MaterialDialog
+            dialog = MaterialDialog(self.root, self.db, item_id)
+        elif self.current_ref_type == "master":
+            from dialogs.master_dialog import MasterDialog
+            dialog = MasterDialog(self.root, self.db, item_id)
+        else:
+            messagebox.showinfo("В разработке", f"Редактирование {self.current_ref_type} в разработке")
+            return
+        
+        self.root.wait_window(dialog.window)
+        self.show_reference(self.current_ref_type)
+
+    def delete_ref_item(self):
+        """Удаление элемента справочника"""
+        selection = self.ref_table.selection()
+        if not selection:
+            messagebox.showwarning("Предупреждение", "Выберите элемент для удаления")
+            return
+        
+        if not messagebox.askyesno("Подтверждение", "Удалить выбранный элемент?\n(Если есть связанные данные, удаление будет невозможно)"):
+            return
+        
+        item = self.ref_table.item(selection[0])
+        item_id = item['values'][0]
+        
+        try:
+            with self.db.get_cursor() as cur:
+                if self.current_ref_type == "client":
+                    cur.execute("DELETE FROM client WHERE id_client = %s", (item_id,))
+                elif self.current_ref_type == "car":
+                    cur.execute("DELETE FROM car WHERE id_car = %s", (item_id,))
+                elif self.current_ref_type == "work_type":
+                    cur.execute("DELETE FROM work_type WHERE id_work_type = %s", (item_id,))
+                elif self.current_ref_type == "material":
+                    cur.execute("DELETE FROM material WHERE id_material = %s", (item_id,))
+                elif self.current_ref_type == "master":
+                    cur.execute("DELETE FROM master WHERE id_master = %s", (item_id,))
+                self.db.commit()
+            
+            messagebox.showinfo("Успех", "Элемент удалён")
+            self.show_reference(self.current_ref_type)
+        except Exception as e:
+            self.db.rollback()
+            messagebox.showerror("Ошибка", f"Нельзя удалить, есть связанные данные: {e}")
 
 
 def main():
