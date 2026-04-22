@@ -1,14 +1,17 @@
-# конфигурационный файл с паролем
+# конфигурация с паролем
 config.py
 
+# виртуальное окружение
 .env
 *.env
 
+# Python
 __pycache__/
 *.pyc
 .venv/
 venv/
 
+# IDE
 .vscode/
 .idea/
 *.swp
